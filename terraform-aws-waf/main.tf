@@ -1,6 +1,7 @@
 resource "aws_wafv2_web_acl" "wafacl" {
   name        = "wafwebacl-rules-${var.long_environment}"
   description = "Custom WAFWebACL"
+  scope = "GLOBAL"
   default_action {
     allow {}
   }
