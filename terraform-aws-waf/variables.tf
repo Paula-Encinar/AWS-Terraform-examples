@@ -1,1 +1,3 @@
-variable "long_environment" {}
+variable "long_environment" {
+    default = "testing"
+}
