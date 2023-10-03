@@ -199,12 +199,52 @@ resource "aws_instance" "app_server" {
   ]
 
   tags = {
-    "Patch Group" = "development"
-    Environment = "development"
+    "Patch Group" = var.long_environment
+    Environment = var.long_environment
     Name = "Paula_test"
     
   }
 
   depends_on = [ aws_security_group.sg ]
   
+}
+
+
+resource "aws_instance" "powerbi_server_automation" {
+  count                       = var.long_environment == "production" ? 1 : 0
+  ami                         = "ami-0fe0759579a2836cc"
+  instance_type               = "t2.micro"
+  iam_instance_profile        = aws_iam_instance_profile.dev-resources-iam-profile.name 
+  # user_data                   = data.template_file.user_data_bastion.rendered
+  # user_data_replace_on_change = false
+
+  vpc_security_group_ids = [
+    aws_security_group.sg.id
+  ]
+
+  tags = {
+    "Patch Group" = var.long_environment
+    Environment   = var.long_environment
+    "Name"        = "powerbi_server-automation-${var.long_environment}"
+
+  }
+
+}
+
+#ids
+data "aws_instance" "powerbi_ec2_id" {
+  count = var.long_environment == "production" ? 1 : 0
+  depends_on = [
+    aws_instance.powerbi_server_automation
+  ]
+
+  filter {
+    name   = "tag:Name"
+    values = [aws_instance.powerbi_server_automation[0].tags.Name]
+  }
+
+  filter {
+    name   = "instance-state-name"
+    values = ["running"]
+  }
 }
