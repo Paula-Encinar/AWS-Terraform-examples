@@ -68,9 +68,14 @@ resource "null_resource" "install_lambda_python" {
   provisioner "local-exec" {
     working_dir = "${path.module}/../lambda/ec2-reboot"
     command = <<-EOF
+      # Create a temporary directory for packaging
+      mkdir temp_site_packages
 
-      # Install your Python dependencies into the 'python' directory.
-      pip install -r requirements.txt
+      # Download the Python packages listed in requirements.txt into the temporary directory
+      pip install -r requirements.txt -t temp_site_packages
+
+      # Copy the Lambda function code to the temporary directory
+      cp lambda_function.py temp_site_packages
 
     EOF
   }
