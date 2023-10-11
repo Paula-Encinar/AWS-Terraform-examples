@@ -64,32 +64,48 @@ resource "aws_iam_role_policy_attachment" "attach_iam_policy_to_iam_role_ec2_reb
   policy_arn = aws_iam_policy.iam_policy_for_lambda_ec2_reboot.arn
 }
 
+resource "null_resource" "install_lambda_python" {
+  provisioner "local-exec" {
+    working_dir = "${path.module}/../lambda/ec2-reboot"
+    command = <<-EOF
+
+      # Install your Python dependencies into the 'python' directory.
+      pip install -r requirements.txt
+
+    EOF
+  }
+
+  triggers = {
+    always_run = "${timestamp()}"
+  }
+}
+
 data "archive_file" "zip_the_python_code" {
 type        = "zip"
-source_dir  = "../lambda/ec2-reboot"
-output_path = "../lambda/hello-python.zip"
+depends_on = [ null_resource.install_lambda_python ]
+source_dir  = "${path.module}/../lambda/ec2-reboot/temp_site_packages"
+output_path = "${path.module}/../lambda/ec2-reboot/lambda_deployment_package.zip"
+}
+
+resource "aws_s3_object" "lambda_bucket_object" {
+  bucket = "paula-lambda"
+
+  depends_on = [data.archive_file.zip_the_python_code]
+
+  key    = "testing-${data.archive_file.zip_the_python_code.output_base64sha256}.zip"
+  source = data.archive_file.zip_the_python_code.output_path
 }
 
 resource "aws_lambda_function" "terraform_lambda_func" {
-filename                       = "../lambda/hello-python.zip"
+source_code_hash = data.archive_file.zip_the_python_code.output_base64sha256
+s3_bucket = "paula-lambda"
+s3_key = aws_s3_object.lambda_bucket_object.key
 function_name                  = "Spacelift_Test_Lambda_Function"
 role                           = aws_iam_role.lambda_role.arn
 handler                        = "lambda_function.lambda_handler"
 runtime                        = "python3.9"
 depends_on                     = [aws_iam_role_policy_attachment.attach_iam_policy_to_iam_role]
-environment {
-  variables = {
-    EC2_INSTANCE_ID = aws_instance.app_server.id
-    EC2_INSTANCE_ID_POWERBI = var.long_environment == "production" ? length(aws_instance.powerbi_server_automation[*].id) > 0 ? aws_instance.powerbi_server_automation[0].id : "" : ""
-
-    }
-  }
 }
 
-resource "aws_lambda_permission" "remove_inactive_auditors_with_audits_lambda_permission" {
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.terraform_lambda_func.arn
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.schedule_rule.arn
-}
+
 
